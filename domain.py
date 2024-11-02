@@ -1,72 +1,62 @@
+import uuid
 from fasthtml.common import *
-from dataclasses import dataclass
-from itertools import cycle
-from random import choice, shuffle
+from dataclasses import dataclass, field
+from random import choice
 from copy import copy
+from wordpack import WordPack
 
 
 @dataclass
 class User:
-    name: str
-    points: int
-    send: FunctionType
+    name: str = 'null'
+    points: int = 0
+    ws_send: Optional[FunctionType] = None
+    img: str = 'https://randomuser.me/api/portraits/lego/2.jpg'
 
-    def add_points(self, value):
-        self.points += value
+    def add_points(self, value): self.points += value
+    def clear_points(self): self.points = 0
 
-    def clear_points(self):
-        self.points = 0
 
 @dataclass
 class Mine:
-    word: str
-    triggered: bool
     user: User
+    id: str = str(uuid.uuid4())
+    word: str = ''
+    triggered: bool = False
 
-    def trigger(self):
-        self.triggered = True
+    def click(self): self.triggered = not self.triggered
 
-@dataclass
-class WordPack:
-    name: str
-    words: list[str]
+class State(Enum):
+    MINING = "MINING"
+    GUESSING = "GUESSING"
+    ENDED = "ENDED"
 
-    def __post_init__(self):
-        self.init()
-
-    def init(self):
-        shuffle(self.words)
-        self.word_cycle = cycle(self.words)
-        
-    def __iter__(self): return self
-    
-    def __next__(self) -> str:
-        return next(self.word_cycle)
 
 @dataclass
 class Round:
-    state: str
-    resolved: bool
     word: str
-    mines: list[Mine]
     guesser: User
     explainer: User
-    mines_count: int
+    mines_count: int 
+    states = cycle([State.MINING, State.GUESSING, State.ENDED])
+    state: State = State.MINING
+    resolved: bool = False
+    mines: dict[Mine] = field(default_factory=dict)
 
     def add_mine(self, mine: Mine):
-        self.mines.append(mine)
-
-        if len(self.mines) >= self.mines_count:
-            self.state = "GUESSING"
+        self.mines[mine.id] = mine
+        if len(self.mines) >= self.mines_count: self.state = next(self.states)
+        
+    def get_mine(self, mine_id: str): return self.mines[mine_id]
 
     def end_round(self, resolved: bool):
-        if self.state == "MINING":
+        if self.state == State.MINING:
             raise Exception("Cannot end round while mining")
 
         mine_trig = False
         self.resolved = resolved
-        ## TODO dont give points
-        self.state = "ENDED"
+        # TODO dont give points
+        self.state = State.ENDED
 
         for mine in self.mines:
             if not mine.triggered:
@@ -78,46 +68,40 @@ class Round:
         if mine_trig:
             self.guesser.add_points(-2)
             return
-        
+
         self.guesser.add_points(5)
         self.explainer.add_points(5)
-    
 
-@dataclass
+
 class Lobby:
-    id: int
-    started: bool
-    users: dict[User]
-    round: Round
-    word_pack: WordPack
+    def __init__(self, id: int, wp_name: str = 'default'):
+        self.id, self.started, self.round, self.users = id, False, None, {}
+        self.select_wordpack(wp_name)
+        self.update_users()
+
+    def select_wordpack(self, name: str):
+        self.wordpack = WordPack.get_from_dict(name)
+        return self.wordpack
 
     def update_users(self):
         self.user_cycle = cycle(self.users.items())
 
-        for user in self.users.values():
-            user.clear_points()
+        for user in self.users.values(): user.clear_points()
 
-    def start_game(self) -> Round:
-        if self.started: return self.next_round()
+    def restart_game(self) -> Round:
+        """Start a new game and return the first round"""
         self.started = True
         self.update_users()
-        self.word_pack.init()
+        self.wordpack.reset()
         return self.next_round()
 
-    def join(self, id: str, user: User):
-        if self.started:
-            raise Exception("Game is started")
+    def join(self, uid: str, user: User):
+        if self.started: raise HTTPException(403, "Game already started")
+        self.users[uid] = user
 
-        if user in self.users.values():
-            raise Exception("User already exist")
-
-        self.users[id] = user
-
-    def leave(self, id: str):
-        if self.started:
-            raise Exception("Game is started")
-
-        del self.users[id]
+    def leave(self, uid: str):
+        if self.started: raise HTTPException(401, "Game is started")
+        del self.users[uid]
 
     def end_round(self, resolved: bool):
         self.round.end_round(resolved)
@@ -128,14 +112,6 @@ class Lobby:
         del guessers[curr_id]
         curr_guesser = guessers[choice(list(guessers.keys()))]
 
-        self.round = Round(
-            "MINING",
-            False,
-            next(self.word_pack),
-            [],
-            curr_explainer,
-            curr_guesser,
-            len(guessers) - 1
-        )
+        self.round = Round(next(self.wordpack),curr_guesser, curr_explainer,len(guessers) - 1)
 
         return self.round

@@ -1,0 +1,74 @@
+.user-info {
+  display: inline-flex;
+  align-items: center;
+  background-color: #333;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 1.5rem;
+  gap: 2.5rem;
+}
+
+.user-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f3e0b5;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-size: 1.5rem;
+}
+
+.user-name {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.user-score {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #555;
+  color: #fff;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  font-size: 1rem;
+}
+
+
+.circle {
+  width: 50px; /* Fixed width */
+  height: 50px; /* Fixed height */
+  border-radius: 50%; /* Make the container circular */
+  overflow: hidden; /* Hide overflow to keep the circle shape */
+  display: flex; /* Center the image */
+  justify-content: center; /* Center the image horizontally */
+  align-items: center; /* Center the image vertically */
+}
+
+.circle img {
+  width: 100%; /* Scale the image to fit the container */
+  height: auto; /* Maintain aspect ratio */
+}
+
+
+.text-like-input {
+  border: none;                 /* Remove default border */
+  background: none;            /* Remove default background */
+  padding: 0;                  /* Remove default padding */
+  margin: 0;                   /* Remove default margin */
+  font-size: 16px;             /* Match font size */
+  color: #fff;
+  outline: none;               /* Remove outline on focus */
+  width: 100%;                 /* Full width */
+}
+
+.text-like-input:focus {
+  border: none;                /* Ensure no border on focus */
+  background: none;           /* Ensure background remains transparent */
+}
+
+.text-like-input:focus-visible {
+  outline: 1px dotted #007BFF; /* Optional: add a dotted outline on focus */
+}

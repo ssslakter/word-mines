@@ -1,178 +1,182 @@
-import random
+import uuid
 from fasthtml.common import *
-
 from domain import *
 
-lobby = Lobby(
-    1,
-    False,
-    {},
-    None,
-    WordPack(
-        name="default",
-        words=["кринж","кринге","кукож","крипота","флекс","тян","кун","куколд","рейв","ивент","айкос","ашка","подик","снюс","вкид","стафф","Garage","ESSA","сидр","энергос","биполярочка","пограничка","СДВГ","аутизм","РПП","трэш","хайп","хейт","всратый","агриться","буллить","триггерить","сталкерить","гамать","ультануть","форсить","шеймить","байтить","хейтить","чекать","юзать","флеймить","свайпить","няшиться","заскамить","сабить","ливнуть","оффнуть","мурчать","чилить","фолловить","шипперить","стэнить","абьюз","буллинг","газлайтинг","бодишейминг","слатшейминг","виктимблейминг","гостинг","харассмент","селфхарм","зашквар","рили","изи","скам","нюдсы","тикток","фаст","краш","симп","нормис","токсик","днокл","шмот","Thrasher","свитшот","чокер","паль","мерч","дрейнер","«Рёдан»","zxc","рофл","лмао","мем","постирония","челлендж","анбоксинг","ауф","сабж","POV","суетолог","думер","скуф","инцел","хейтер","хикка","хоумстакер","альтушка","дединсайд","анимешник","аутист","соулмейт","хоуми","абьюзер","реселлер","типикал","литералли","хорни","эщкере","сасный","ламповый","чайлдфри","позер","офник","душнила","фембой","личинус","каре","парные аватарки","ЛП","ЧСВ","катка","Fortnite","Roblox","VALORANT","CS:GO","PUBG Mobile","Phasmophobia","Brawl Stars","Genshin Impact","Among Us","Куплинов","Booster","Курсед","Братишкин","Даня Милохин","Дора","дорама","MORGENSTERN","FACE","PHARAOH","«Три дня дождя»","Scally Milano","uglystephan","Пошлая Молли","кис-кис","Дайте Танк (!)","Порнофильмы","Инстасамка","OG Buda","xxxtentacion","BTS","Билли Айлиш","The Weeknd","$uicideBoy$","Måneskin","k-pop","грайм","синтипоп","фонк","slowed + reverb","вайб","свэг","панч","попит","симпл-димпл","френдзона","актуалочка","инфа-сотка","база","мув","муд","тейк","фидбэк","гоу","мьют","инвайт","трабл","факап","фанфик","скилл","пруф","слив","тгк","ку","кек","gg","абобус","сойджек","гигачад","орево","жиза","рил","поч","жёсткий пон","пж","сорян","топ","прив","личка","шкила","семпай","гендер","дрейн","стрейт","альт","reels","Хилми","Юля Финесс","Валя Карнавал","Егор Шип","Аня Покров","Артур Бабич","Юля Гаврилина","Влад А4","MrBeast"]
-    ))
-users = lobby.users
-
-scr = Script(src="https://unpkg.com/hyperscript.org@0.9.13")
-app, rt = fast_app(exts='ws', hdrs=[scr])
+lobby = Lobby(1)
+users: dict[str, User] = lobby.users
+hdrs = [
+    Link(rel="stylesheet", href="/static/style.css", type="text/css"),
+]
+app, rt = fast_app(exts='ws', hdrs=hdrs, bodykw={'hx-boost': 'true'})
 app: FastHTML
-
-
-def UsersList(users):
-    if not users: return Div("Empty lobby")
-    return Div(
-        P("Users: "),
-        Ul(*[Li(f"User {u.name} - {u.points}") for u in users.values()]),
-        id='usr-list')
-
-
-def on_conn(ws, scope, send):
-    uname = ws.cookies.get('name', None)
-    uname =  base64.b64decode(uname[2:-1]).decode('utf-8') if uname else 'NONE'
-    users[str(id(ws))] = User(name=uname, points=0, send=send)
-
-
-async def on_disconn(ws):
-    del users[str(id(ws))]
-    # for u in users.values(): await u.send(UsersList(users))
-
-async def start_handler(ws, data):
-    round = lobby.start_game()
-    guesser = round.guesser
-    explainer = round.explainer
-    for u in users.values():
-        await u.send(LobbyState(lobby, u))
-
-
-async def join_handler(ws, data: dict):
-    name: str = data['name']
-    users[str(id(ws))].name = name
-    for u in users.values(): await u.send(UsersList(users))
-    u = users[str(id(ws))]
-    await u.send(Script(f'document.cookie = "name={base64.b64encode(name.encode('utf-8'))}; path=/;";', id="name_script"))
 
 
 async def guess_handler(ws, data: dict):
     guess = data['guess'] == 'true'
     lobby.end_round(guess)
     # time.sleep(10)
-    await start_handler(ws, data) # Сделать отдельную кнопку
-
-async def submit_mine_handler(ws, data: dict):
-    word = data['name']
-    round = lobby.round
-    round.add_mine(Mine(word, False, users[str(id(ws))]))
-    for u in users.values():
-        await u.send(LobbyState(lobby, u)) # потом)
-
-handlers = {
-    'start': start_handler,
-    'join': join_handler,
-    'guess': guess_handler,
-    'submit mine': submit_mine_handler
-}
-
-
-@app.ws("/ws", conn=on_conn, disconn=on_disconn)
-async def ws(ws, data, send):
-    await handlers[data['action']](ws, data)
+    # await start_handler(ws, data)  # Сделать отдельную кнопку
 
 
 @rt('/')
-def get():
-    return Redirect('/lobby')
+def get(): return Redirect('/lobby')
 
 
-def WsButton(key, value, *args, name='', **kwargs):
-    return Form(
-        *args,
-        Input(type="hidden", value=value, name=key),
-        Input(type="submit", value=name),
-        ws_send=True, **kwargs)
-
-def can_see_mines(round: Round, user: User):
+def see_mines(round: Round, user: User):
     return not user is round.explainer and not user is round.guesser
+
+
+# def LobbyState(lobby: Lobby, user: User):
+#     round = lobby.round
+#     is_started = H2("Game started!" if lobby.started else "Game not started", id='started')
+#     round_status = H3(f"STATUS: {round.state if round else 'NULL'}", id='round_status')
+#     guesser = P(f"Guesser: {round.guesser.name if round else 'No one'}", id='guesser')
+#     explainer = P(f"Explainer: {round.explainer.name if round else 'No one'}", id='explainer')
+#     game = Game(round, user, id='game') if round and user else Div(id='game')
+#     # return is_started, guesser, explainer, usr_list, round_status, mines, game
+
+
+def MineCard(mine: Mine, curr_user: User):
+    btn = Button("EXplOdE", hx_put="/mine", hx_vals={"mine-id": mine.id})
+    return Card(*(mine.word, btn) if lobby.round.state == State.ENDED or see_mines(lobby.round, curr_user) else '',
+                header=f"{mine.user.name}'s Mine")
+
 
 def Mines(round: Round, user: User):
     mines = round.mines
+    return Div(*[MineCard(m, user) for m in mines.values()], id='mines')
+
+
+def MineForm(round: Round, curr_user: User):
+    if not see_mines(round, curr_user): return None
     return Div(
-        *[Card(
-            Div(
-                mine.word,
-                P("💥" if mine.triggered else "✅"),
-                
-                ) if round.state == "ENDED" or can_see_mines(round, user) else 'XXX',
-            header=f"{mine.user.name}'s Mine", id=f"mine-{i}") 
-          for i, mine in enumerate(mines)], 
-        id='mines')
+        Form(
+            Input(type="text", name="word", style='flex: 4; '),
+            Button("Send", type="submit", style='flex: 1;'),
+            hx_post="/mine",
+            style='display: flex; align-items: center;'
+        ),
+        P("Напишите 'слово-мину'!"),
+        id='mine-form')
 
-def CreateMineForm(round: Round, user: User):
-    if not can_see_mines(round, user): return Container(id='mine-form')
 
-    for mine in round.mines:
-        if mine.user == user: return Container(id='mine-form')
-    
-    return Container(
-        P("Enter wordmine:"),
-            WsButton("action", "submit mine", 
-                     Input(type="text", name="name"),
-                     name="Submit mine"), 
-            id='mine-form'
-    )
-    
+def MiningState(curr_user: User, round: Round):
+    mine_form = MineForm(round, curr_user) if round.state == State.MINING else None
+    mines = Mines(round, curr_user)
+    return mine_form, mines
 
-def Game(round, user: User = False, id="game"):
-    is_explainer = round.explainer == user
-    is_guesser = round.guesser == user
-    word = round.word if not is_guesser else 'XXX'
 
-    if round.state == "GUESSING":
-        controls = Div(
-            WsButton("action", "guess",
-                Input(type="hidden", value='true', name='guess'),
-                name="Word is correct"),
-            WsButton(
-                "action", "guess", 
-                Input(type="hidden", value='false', name='guess'),
-                name="Word is incorrect"),
-        ) if is_explainer else None
-    elif round.state == "MINING":
-        controls = CreateMineForm(round, user)
-    return Container(H2(f"Word: {word}"), controls, id=id)
+def GuessingBlock(curr_user: User, round: Round):
+    gs, ex = UserCard(round.guesser), UserCard(round.explainer)
+    word_block = H2(f"Word: {round.word if curr_user != gs else 'XXX'}", style='text-align: center;')
+    btns = Div(
+        Button("Guessed correctly", hx_post="/guess", hx_vals={"guess": "true"}),
+        Button("Guessed incorrectly", hx_post="/guess", hx_vals={"guess": "false"}),
+    ) if round.state == State.GUESSING and curr_user == round.explainer else None
+    block = Div(Div('Explainer', ex), word_block, Div("Guesser", gs), style='display: flex; align-items: center;')
+    return Div(block, btns, id='guess')
 
-def LobbyState(lobby: Lobby, user: User):
+
+def Game(curr_user: User):
     round = lobby.round
-    is_started = H2("Game started!" if lobby.started else "Game not started", id='started')
-    round_status = H3(f"STATUS: {round.state  if round else 'NULL'}", id='round_status')
-    guesser = P(f"Guesser: {round.guesser.name if round else 'No one'}", id='guesser')
-    explainer = P(f"Explainer: {round.explainer.name  if round else 'No one'}", id='explainer')
-    game = Game(round, user, id='game') if round and user else Div(id='game')
-    usr_list = UsersList(lobby.users)
-    mines = Mines(round, user) if round and user else Div(id='mines')
-    return is_started, guesser, explainer, usr_list, round_status, mines, game
+    start = Button("Start Game", hx_post="/start") if not round or round.state == State.ENDED else None
+    if not round: return Div(start, id="game")
+    mines = MiningState(curr_user, round)
+    return Div(GuessingBlock(curr_user, round), start, mines, id="game", style='padding-top: 25px;')
+
+
+def UserCard(user: User, editable=False):
+    name = Input(type="text", name="name", value=user.name, cls='text-like-input',
+                 hx_post="/rename", hx_swap='none', hx_vals={'id': lobby.id}) if editable else user.name
+    return Div(
+        Div(Img(src=user.img), cls='circle'),
+        Div(name, cls="user-name"),
+        Div(user.points, cls="user-score"),
+        cls='user-info'
+    )
+
+
+def Users(curr_user: User = None):
+    print(users.keys(), curr_user.name)
+    return Div(
+        P("Users: "),
+        Ul(*[Li(UserCard(u, u == curr_user)) for u in users.values() if u.ws_send],),
+        style="display: flex; align-items: center; justify-content: center;", id='users'
+    )
+
+
+def Home(curr_user=None):
+    t = 'Word Mines 💣'
+    users_list = Users(curr_user)
+    hdr = Header(H3(t))
+    main = Container(users_list, Game(curr_user), style='flex:1;', hx_ext='ws', ws_connect='/game')
+    ftr = Footer(P('© 2024. Made by ssslakter'), style='align-self: center;')
+    body = Body(hdr, main, ftr, style='display: flex; flex-direction: column; min-height: 100vh;')
+    return Title(t), body
+
+
+def get_uid(sess=None, scope=None):
+    sess: dict = scope.get('session', {}) if sess is None else sess
+    return sess.setdefault('uid', str(uuid.uuid4()))
 
 
 @rt('/lobby')
-def get(sess, id: int = None):
-    if not id:
-        # lobby = Lobby(id, list())
-        return Redirect(f'/lobby?id={1}')
-    # Get all users in the lobby
-    *before, after = LobbyState(lobby, None)
-    return Container(
-        Script(id="name_script"),
-        H1(f"Lobby {id}"),
-        *before,
-        P("Enter your name:"),
-        Form(
-            Input(type="text", name="name"),
-            WsButton("action", "join", name="Join"), ws_send=True
-        ),
-        WsButton("action", "start", name="Start game"),
-        after,
-        hx_ext='ws', ws_connect="/ws"
-    )
+def get(sess):
+    uid = get_uid(sess)
+    u = users.setdefault(uid, User())
+    return Home(u)
+
+
+@rt('/rename')
+async def post(sess, id: str, name: str = 'null'):
+    uid = get_uid(sess)
+    if u := users.get(uid): u.name = name
+    else: return Redirect(f'/lobby')
+    fn = lambda u: (Users(u), (GuessingBlock(u, lobby.round), Mines(lobby.round, u)) if lobby.round else None)
+    await update_users(fn)
+
+
+@rt('/start')
+async def post():
+    lobby.restart_game()
+    await update_users(Game)
+
+
+@rt('/mine')
+async def post(sess, word: str):
+    uid = get_uid(sess)
+    if u := users.get(uid): lobby.round.add_mine(Mine(u, word))
+    else: return Redirect(f'/lobby')
+    fn = lambda u: (Mines(lobby.round, u))
+    await update_users(fn)
+
+
+@rt('/mine')
+async def put(mine_id: str):
+    mine = lobby.round.mines.get(mine_id)
+    if mine: mine.click()
+    fn = lambda u: (Mines(lobby.round, u))
+    await update_users(fn)
+
+
+@rt('/guess')
+async def post(sess, guess: str):
+    pass  # TODO
+
+
+async def update_users(components_fn=None):
+    for u in users.values():
+        if u.ws_send: await u.ws_send(components_fn(u))
+
+
+async def on_ws_change(scope, send, disconn=False):
+    uid = get_uid(scope=scope)
+    if u := users.get(uid): u.ws_send = None if disconn else send
+    await update_users(Users)
+
+
+@app.ws('/game', conn=on_ws_change, disconn=partial(on_ws_change, disconn=True))
+async def ws(send): pass
 
 
 serve(host="0.0.0.0")
