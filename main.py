@@ -42,7 +42,7 @@ def MineForm(round: Round, curr_user: User):
     return Div(
         Form(Group(Input(type="text", name="word"), Button("Send", type="submit")),
              hx_post="/mine", hx_target="#mine-form", hx_swap="outerHTML"),
-        P("Напишите 'слово-мину'!"),
+        P("Write a 'word-mine'!"),
         id='mine-form', cls='flex-vert', style='margin-top: 25px;')
 
 
