@@ -9,9 +9,9 @@ from wordpack import WordPack
 
 
 class State(Enum):
-    MINING = ("MINING", 25)
-    GUESSING = ("GUESSING", 30)
-    ENDED = ("ENDED", 25)
+    MINING = ("MINING", 65)
+    GUESSING = ("GUESSING", 60)
+    ENDED = ("ENDED", 65)
 
     def __str__(self): return self.value[0]
     def __int__(self): return self.value[1]
@@ -119,12 +119,12 @@ class Lobby:
         self.user_cycle = cycle(self.users.items())
         for user in self.users.values(): user.clear_points()
 
-    def restart_game(self) -> Round:
+    def restart_game(self, coro=None, cb=None) -> Round:
         """Start a new game and return the first round"""
         self.started = True
         self.update_users()
         self.wordpack.reset()
-        return self.next_round()
+        return self.next_round(coro, cb)
 
     def join(self, uid: str, user: User):
         if self.started: raise HTTPException(403, "Game already started")
@@ -136,14 +136,14 @@ class Lobby:
 
     def end_round(self, resolved: bool): self.round.end_round(resolved)
 
-    def next_round(self) -> Round:
+    def next_round(self, coro=None, cb=None) -> Round:
         curr_id, curr_explainer = next(self.user_cycle)
         guessers = copy(self.users)
         del guessers[curr_id]
         curr_guesser = guessers[choice(list(guessers.keys()))]
         if self.round: self.round.timer.reset() # TODO this is a hack
         self.round = Round(next(self.wordpack), curr_guesser, curr_explainer, len(guessers) - 1)
-
+        self.round.set_timer(coro, cb)
         return self.round
 
 

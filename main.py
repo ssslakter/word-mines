@@ -21,14 +21,13 @@ setup_toasts(app)
 
 
 def MineCard(mine: Mine, curr_user: User):
-    btn = Button("Change", hx_post="/trigger",
-                 hx_vals={"mine_id": mine.user.uid}) if lobby.round.state == State.GUESSING else None
+    kwargs = dict(hx_post="/trigger", hx_vals={"mine_id": mine.user.uid}, style='cursor: pointer;')
     triggered = "💥" if mine.triggered else ""
     return Div(H3(f"{mine.user.name}'s Mine"),
                Div(H3(mine.word), P(triggered, style='font-size: xxx-large;'),
                    cls='flex-hor', style='justify-content: space-between;')
                if lobby.round.state == State.ENDED or sees_mines(lobby.round, curr_user) else '',
-               btn if sees_mines(lobby.round, curr_user) else None, cls='card flex-vert')
+               **kwargs if lobby.round.state == State.GUESSING and sees_mines(lobby.round, curr_user) else {}, cls='card flex-vert')
 
 
 def Mines(round: Round, user: User):
@@ -52,12 +51,13 @@ def MiningState(curr_user: User, round: Round):
     return mines, mine_form
 
 
-def TimerFT(time: int = 10, _: User=None):
+def TimerFT(time: int = 10, _: User = None):
     return Div(H3(f"Time left: {time}"), id='timer', style='padding: 10px;')
+
 
 def GuessingState(curr_user: User, round: Round):
     gs, ex = UserCard(round.guesser, w_score=False), UserCard(round.explainer, w_score=False)
-    word_block = Div(H2(f"Word: {round.word if curr_user != gs else 'XXX'}", style='text-align: center;'))
+    word_block = Div(H2(f"Word: {round.word if round.state == State.ENDED or curr_user != round.guesser else 'XXX'}", style='text-align: center;'))
     timer = TimerFT(round.timer.time)
     btns = Div(
         Button("Guessed correctly", hx_post="/guess", hx_vals={"guess": "true"}),
@@ -83,7 +83,7 @@ def Game(curr_user: User):
 def UserCard(user: User, editable=False, w_score=True):
     name = Input(type="text", name="name", value=user.name, cls='text-like-input',
                  hx_post="/rename", hx_swap='none', hx_vals={'id': lobby.id}, style='margin: 5px 0;') if editable else user.name
-    image = Div(Img(src=user.img) if user.img else H3(user.name[0], style='margin: 0;'),
+    image = Div(Img(src=user.img) if user.img else H3(user.name[0] if user.name else 'n', style='margin: 0;'),
                 cls='circle', style=f'background-color: {str2soft_hex(user.name)};')
     return Div(image,
                Div(name, cls="user-name"),
@@ -138,8 +138,8 @@ async def post(sess):
     if len(users) < 3:
         add_toast(sess, "Not enough players", 'error')
         return Div()
-    if not lobby.round: lobby.restart_game()
-    elif lobby.round.state == State.ENDED: lobby.next_round()
+    if not lobby.round: lobby.restart_game(timer_coro, timer_cb)
+    elif lobby.round.state == State.ENDED: lobby.next_round(timer_coro, timer_cb)
     else: return
     lobby.round.set_timer(timer_coro, timer_cb)
     await update_users(Game)
@@ -185,9 +185,12 @@ async def post(sess, guess: str):
 async def timer_coro(time: int):
     fn = lambda u: TimerFT(time)
     await update_users(fn)
-    
+
+
 async def timer_cb(finished: bool):
-    if finished: lobby.round.next_state(timer_coro, timer_cb)
+    if finished:
+        if lobby.round.state == State.ENDED: lobby.next_round(timer_coro, timer_cb)
+        else: lobby.round.next_state(timer_coro, timer_cb)
     await update_users(Game)
 
 
