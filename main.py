@@ -4,8 +4,7 @@ import uuid
 from fasthtml.common import *
 from domain import *
 
-lobby = Lobby(1)
-users: dict[str, User] = lobby.users
+
 
 
 gridlink = Link(rel="stylesheet",
@@ -26,18 +25,17 @@ def MineCard(mine: Mine, curr_user: User):
     return Div(H3(f"{mine.user.name}'s Mine"),
                Div(H3(mine.word), P(triggered, style='font-size: xxx-large;'),
                    cls='flex-hor', style='justify-content: space-between;')
-               if lobby.round.state == State.ENDED or sees_mines(lobby.round, curr_user) else '',
-               **kwargs if lobby.round.state == State.GUESSING and sees_mines(lobby.round, curr_user) else {}, cls='card flex-vert')
+               if sees_mine_cards(lobby.game, curr_user) else '',
+               **kwargs if lobby.game.state == State.GUESSING and sees_mine_cards(lobby.game, curr_user) and curr_user in lobby.players else {}, cls='card flex-vert')
 
 
-def Mines(round: Round, user: User):
-    mines = round.mines
+def Mines(game: Game, user: User):
+    mines = game.mines
     return Div(*[MineCard(m, user) for m in mines.values()], id='mines', cls='mines-container')
 
 
-def MineForm(round: Round, curr_user: User):
-    if not sees_mines(round, curr_user): return None
-    if any(map(lambda m: m.user == curr_user, round.mines.values())): return None
+def MineForm(game: Game, curr_user: User):
+    if not sees_mine_form(game, curr_user) or any(map(lambda m: m.user == curr_user, game.mines.values())): return None
     return Div(
         Form(Group(Input(type="text", name="word"), Button("Send", type="submit")),
              hx_post="/mine", hx_target="#mine-form", hx_swap="outerHTML"),
@@ -45,7 +43,7 @@ def MineForm(round: Round, curr_user: User):
         id='mine-form', cls='flex-vert', style='margin-top: 25px;')
 
 
-def MiningState(curr_user: User, round: Round):
+def MiningState(curr_user: User, round: Game):
     mine_form = MineForm(round, curr_user) if round.state == State.MINING else None
     mines = Mines(round, curr_user)
     return mines, mine_form
@@ -55,26 +53,26 @@ def TimerFT(time: int = 10, _: User = None):
     return Div(H3(f"Time left: {time}"), id='timer', style='padding: 10px;')
 
 
-def GuessingState(curr_user: User, round: Round):
-    gs, ex = UserCard(round.guesser, w_score=False), UserCard(round.explainer, w_score=False)
-    word_block = Div(H2(f"Word: {round.word if round.state == State.ENDED or curr_user != round.guesser else 'XXX'}", style='text-align: center;'))
-    timer = TimerFT(round.timer.time)
+def GuessingState(curr_user: User, game: Game):
+    gs, ex = UserCard(game.guesser, w_score=False), UserCard(game.explainer, w_score=False)
+    word_block = Div(H2(f"Word: {game.word if game.state == State.ENDED or curr_user != game.guesser else 'XXX'}", style='text-align: center;'))
+    timer = TimerFT(game.timer.time)
     btns = Div(
         Button("Guessed correctly", hx_post="/guess", hx_vals={"guess": "true"}),
         Button("Guessed incorrectly", hx_post="/guess", hx_vals={"guess": "false"}),
         cls='row', style='justify-content: center; align-items: center; gap: 30px; margin-top: 20px'
-    ) if round.state == State.GUESSING and curr_user == round.explainer else None
+    ) if game.state == State.GUESSING and curr_user == game.explainer else None
     players = Div(Div(H4('Explainer'), ex, cls='flex-vert'), timer, Div(H4("Guesser"), gs, cls='flex-vert'),
                   cls='row', style='justify-content: center; align-items: center;')
     block = Div(word_block, players)
     return Div(block, btns, id='guess')
 
 
-def Game(curr_user: User):
-    round = lobby.round
-    btn_text = "Start Game" if not round else "Next Round"
-    start = Button(btn_text, hx_post="/start", hx_swap='none') if not round or round.state == State.ENDED else None
-    if not round: return Div(start, id="game")
+def GameFT(curr_user: User):
+    round = lobby.game
+    btn_text = "Start Game" if not round.started else "Next Round"
+    start = Button(btn_text, hx_post="/start", hx_swap='none') if not round.started or round.state == State.ENDED else None
+    if not round.started: return Div(start, id="game")
     game_state = H3(f"GAME STATE: {round.state}")
     mines = MiningState(curr_user, round)
     return Div(game_state, GuessingState(curr_user, round), start, mines, id="game", style='padding-top: 25px;', cls='container')
@@ -102,8 +100,8 @@ def Home(curr_user=None):
     t = 'Word Mines 💣'
     hdr = Header(H3(t), CheckboxX(label="Dark theme", role='switch',
                  onchange='changeTheme(event.target.checked)', id='theme'), cls='flex-hor')
-    main = Main(Users(curr_user), Game(curr_user), Div(), style='flex:1;', hx_ext='ws', ws_connect='/game')
-    ftr = Footer(P('© 2024. Made by ssslakter'), style='align-self: center;')
+    main = Main(Users(curr_user), GameFT(curr_user), Div(), style='flex:1;', hx_ext='ws', ws_connect='/game')
+    ftr = Footer(P('© 2024. Made by ssslakter & cortuzz'), style='align-self: center;')
     body = Body(hdr, main, ftr, style='display: flex; flex-direction: column; min-height: 100vh;')
     return Title(t), body
 
@@ -120,55 +118,60 @@ def get(): return Redirect('/lobby')
 @rt('/lobby')
 def get(sess):
     uid = get_uid(sess)
-    u = users.setdefault(uid, User(uid=uid))
+    u = users.setdefault(uid, User(name = sess.get('name'), uid=uid))
+    if u not in lobby.players: lobby.join(u)
     return Home(u)
 
 
 @rt('/rename')
-async def post(sess, id: str, name: str = 'null'):
+async def post(sess, name: str = 'null'):
+    name = name.strip()
+    if len(name) > 100: return add_toast(sess, 'Name is too long', 'error')
+    if len(name) < 1: return add_toast(sess, 'Name is too short', 'error')
     uid = get_uid(sess)
-    if u := users.get(uid): u.name = name
+    if u := users.get(uid): 
+        sess['name'] = name
+        u.name = name
     else: return Redirect(f'/lobby')
-    fn = lambda u: (Users(u), (GuessingState(u, lobby.round), Mines(lobby.round, u)) if lobby.round else None)
+    fn = lambda u: (Users(u), (GuessingState(u, lobby.game), Mines(lobby.game, u)) if lobby.game else None)
     await update_users(fn)
 
 
 @rt('/start')
 async def post(sess):
-    if len(users) < 3:
+    if len(lobby.players) < 3:
         add_toast(sess, "Not enough players", 'error')
         return Div()
-    if not lobby.round: lobby.restart_game(timer_coro, timer_cb)
-    elif lobby.round.state == State.ENDED: lobby.next_round(timer_coro, timer_cb)
-    else: return
-    lobby.round.set_timer(timer_coro, timer_cb)
-    await update_users(Game)
+    if not lobby.started: lobby.start_game()
+    asyncio.create_task(lobby.game.new_round(lambda: update_users(GameFT)))
 
 
 @rt('/mine')
 async def post(sess, word: str):
     uid = get_uid(sess)
-    if (u := users.get(uid)) and uid not in lobby.round.mines: lobby.round.add_mine(Mine(u, word), timer_coro, timer_cb)
+    if (u := users.get(uid)) and uid not in lobby.game.mines and sees_mine_cards(lobby.game, u) and u in lobby.players: 
+        asyncio.create_task(lobby.game.add_mine(Mine(u, word), lambda: update_users(GameFT)))
     else: return Redirect(f'/lobby')
-    await update_users(Game)
 
 
 @rt('/mine')
 async def put(sess, mine_id: str, word: str):
     uid = get_uid(sess)
     u = users.get(uid)
-    mine = lobby.round.mines.get(mine_id)
+    mine = lobby.game.mines.get(mine_id)
     if not (u and mine) or u != mine.user: return
     mine.word = word
-    fn = lambda u: Mines(lobby.round, u)
+    fn = lambda u: Mines(lobby.game, u)
     await update_users(fn)
 
 
 @rt('/trigger')
-async def post(mine_id: str):
-    mine = lobby.round.mines.get(mine_id)
-    if mine: mine.click()
-    fn = lambda u: Mines(lobby.round, u)
+async def post(sess, mine_id: str):
+    mine = lobby.game.mines.get(mine_id)
+    u = users.get(get_uid(sess))
+    if not mine or u in [lobby.guesser, lobby.explainer]: return
+    mine.click()
+    fn = lambda u: Mines(lobby.game, u)
     await update_users(fn)
 
 
@@ -176,22 +179,19 @@ async def post(mine_id: str):
 async def post(sess, guess: str):
     uid = get_uid(sess)
     u = users.get(uid)
-    if not u or u != lobby.round.guesser: RedirectResponse(f'/lobby')
-    lobby.round.end_round(guess == 'true', timer_coro, timer_cb)
-    fn = lambda u: (Users(u), Game(u))
-    await update_users(fn)
+    if not u or u != lobby.game.guesser: RedirectResponse(f'/lobby')
+    fn = lambda u: (Users(u), GameFT(u))
+    asyncio.create_task(lobby.game.guess(guess == 'true', lambda: update_users(fn)))
 
 
+@Timer.add_coro()
 async def timer_coro(time: int):
     fn = lambda u: TimerFT(time)
     await update_users(fn)
 
 
-async def timer_cb(finished: bool):
-    if finished:
-        if lobby.round.state == State.ENDED: lobby.next_round(timer_coro, timer_cb)
-        else: lobby.round.next_state(timer_coro, timer_cb)
-    await update_users(Game)
+lobby = Lobby(1)
+users: dict[str, User] = lobby.users
 
 
 async def update_users(components_fn=None):

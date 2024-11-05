@@ -6,6 +6,11 @@
   --header-color: #303747;
 }
 
+html{
+  font-size: large;
+  font-weight: 600;
+}
+
 
 /* Main grid layout */
 main {
