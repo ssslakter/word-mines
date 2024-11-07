@@ -37,8 +37,7 @@ def TimerFT(time: int = 10, _: User = None):
 
 def GuessingState(curr_user: User, game: Game):
     gs, ex = UserCard(game.guesser, w_score=False), UserCard(game.explainer, w_score=False)
-    word_block = Div(H2(f"Word: {game.word if game.state == State.ENDED or curr_user !=
-                     game.guesser else 'XXX'}", style='text-align: center;'))
+    word_block = Div(H2(f"Word: {game.word if game.state == State.ENDED or curr_user !=game.guesser else 'XXX'}", style='text-align: center;'))
     timer = TimerFT(game.timer.time)
     btns = Div(
         Button("Guessed correctly", hx_post="/guess", hx_vals={"guess": "true"}),
