@@ -38,7 +38,7 @@ class Timer:
     def reset(self):
         self.unpause()
         self.stop_.clear()
-    
+
     def sleep(self, time: int = 10):
         self.reset()
         self.time = time
@@ -58,6 +58,7 @@ class Timer:
     async def stop(self):
         self.stop_.set()
         if self.task and not self.task.done(): await self.task
+
     def pause(self): self.pause_.clear()
     def unpause(self): self.pause_.set()
     @property
@@ -72,6 +73,7 @@ class Timer:
 
 @dataclass
 class User:
+    is_host: bool = False
     name: str = None
     points: int = 0
     ws_send: Optional[FunctionType] = None
@@ -143,9 +145,9 @@ class Game:
         task = self.timer.sleep(self.state.time())
         if render_coro: await render_coro()
         await task
-        fn_auto = {State.ENDED:self.new_round,
-                    State.GUESSING:self.guess,
-                    State.MINING:self.next_state}
+        fn_auto = {State.ENDED: self.new_round,
+                   State.GUESSING: self.guess,
+                   State.MINING: self.next_state}
         asyncio.create_task(fn_auto[self.state](render_coro))
 
 
@@ -183,13 +185,12 @@ class Lobby:
         return self.game.start()
 
 
-@dataclass
-class LobbyConfig:
-    state_times: dict[State, int]
-
-
 def str2soft_hex(s: str, factor: float = 0.5) -> str:
     hex_color = hashlib.sha256(s.encode()).hexdigest()[:6]
     rgb = [int(hex_color[i:i + 2], 16) for i in (0, 2, 4)]
     soft_rgb = [int(c + (255 - c) * factor) for c in rgb]
     return '#' + ''.join(f'{c:02x}' for c in soft_rgb)
+
+
+lobby = Lobby(1)
+users: dict[str, User] = lobby.users
