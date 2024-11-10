@@ -33,16 +33,14 @@ def MiningState(curr_user: User, round: Game):
 
 
 def TimerFT(time: dt.timedelta = dt.timedelta(seconds=10), _: User = None):
-    stop = (dt.datetime.now() + time).isoformat(timespec='seconds')
-    # return Div(H3(f"Time left: {time}"), id='timer', style='padding: 10px;')
     return Div(
         Div(id='timer', style='padding: 10px;'),
         Script(type="text/hyperscript",
                code=f'''
                 init immediately
                 send stopLoop to next <script/> from #timer
-                set target to "{stop}" as Date
                 set now to Date.now()
+                set target to (now+({time.total_seconds()}*1000)) as Date
                 set diff to 1
                 repeat until event stopLoop
                     set now to Date.now()
