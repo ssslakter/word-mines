@@ -38,6 +38,7 @@ def TimerFT(time: dt.timedelta = dt.timedelta(seconds=10), _: User = None):
         Script(type="text/hyperscript",
                code=f'''
                 init immediately
+                wait 0.5s
                 send stopLoop to next <script/> from #timer
                 set now to Date.now()
                 set target to (now+({time.total_seconds()}*1000)) as Date
