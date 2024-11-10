@@ -11,11 +11,13 @@ gridlink = Link(rel="stylesheet",
 hdrs = [
     gridlink,
     Link(rel="stylesheet", href="/static/style.css", type="text/css"),
+    Script(src="https://unpkg.com/hyperscript.org@0.9.13"),
     Script(src="static/scripts.js"),
 ]
 app, rt = fast_app(exts='ws', hdrs=hdrs, bodykw={'hx-boost': 'true'})
 app: FastHTML
 setup_toasts(app)
+init_logger()
 
 
 @rt('/')
@@ -39,7 +41,7 @@ async def post(sess, name: str = 'null'):
         sess['name'] = name
         u.name = name
     else: return Redirect(f'/lobby')
-    fn = lambda u: (Users(u), (GuessingState(u, lobby.game), Mines(lobby.game, u)) if lobby.game else None)
+    fn = lambda usr: Div(name, cls='user-name', uid=u.uid, hx_swap_oob=f'outerHTML:[uid="{u.uid}"]')
     await update_users(fn)
 
 
@@ -48,15 +50,17 @@ async def post(sess):
     if len(lobby.players) < 3:
         add_toast(sess, "Not enough players", 'error')
         return Div()
-    if not lobby.started: lobby.start_game()
-    asyncio.create_task(lobby.game.new_round(lambda: update_users(GameFT)))
-
+    fn = lambda u: (GameFT(u), Users(u))
+    if not lobby.started: lobby.start_game(lambda: update_users(fn))
+    else: lobby.game.next_round()
+    
 
 @rt('/mine')
 async def post(sess, word: str):
     uid = get_uid(sess)
     if (u := users.get(uid)) and uid not in lobby.game.mines and sees_mine_cards(lobby.game, u) and u in lobby.players:
-        asyncio.create_task(lobby.game.add_mine(Mine(u, word), lambda: update_users(GameFT)))
+        lobby.game.add_mine(Mine(u, word))
+        await update_users(GameFT)
     else: return Redirect(f'/lobby')
 
 
@@ -85,19 +89,11 @@ async def post(sess, guess: str):
     uid = get_uid(sess)
     u = users.get(uid)
     if not u or u != lobby.game.guesser: RedirectResponse(f'/lobby')
-    fn = lambda u: (Users(u), GameFT(u))
-    asyncio.create_task(lobby.game.guess(guess == 'true', lambda: update_users(fn)))
-
-
-# TODO maybe bugs
-@Timer.add_coro()
-async def timer_coro(time: int):
-    fn = lambda u: TimerFT(time)
-    await update_users(fn)
+    lobby.game.guess(guess == 'true')
 
 
 async def on_ws_change(scope, send, disconn=False):
-    if u := get_user(scope): u.ws_send = None if disconn else send
+    if u := get_user(scope=scope): u.ws_send = None if disconn else send
     await update_users(Users)
 
 

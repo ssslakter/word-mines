@@ -15,7 +15,7 @@ rt = APIRouter()
 
 def Settings(curr_user: User):
     if not curr_user.is_host: return Div(id='settings')
-    return Div(Form(Input(type='number', name='time', value=lobby.game.timer.time), hx_post='/seting'), id='settings')
+    return Div(Form(Input(type='number', name='time', value=lobby.game.timer.rem_t), hx_post='/seting'), id='settings')
 
 @rt('/seting')
 def post(cfg: LobbyConfig):

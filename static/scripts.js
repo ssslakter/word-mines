@@ -1,5 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
     theme_box = document.getElementById("theme");
+    if (!theme_box) return;
     theme_box.checked = localStorage.getItem("theme") == "dark";
     changeTheme(theme_box.checked);
 })

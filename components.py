@@ -1,3 +1,4 @@
+import datetime as dt
 from domain import *
 
 
@@ -31,13 +32,36 @@ def MiningState(curr_user: User, round: Game):
     return mines, mine_form
 
 
-def TimerFT(time: int = 10, _: User = None):
-    return Div(H3(f"Time left: {time}"), id='timer', style='padding: 10px;')
+def TimerFT(time: dt.timedelta = dt.timedelta(seconds=10), _: User = None):
+    stop = (dt.datetime.now() + time).isoformat(timespec='seconds')
+    # return Div(H3(f"Time left: {time}"), id='timer', style='padding: 10px;')
+    return Div(
+        Div(id='timer', style='padding: 10px;'),
+        Script(type="text/hyperscript",
+               code=f'''
+                init immediately
+                send stopLoop to next <script/> from #timer
+                set target to "{stop}" as Date
+                set now to Date.now()
+                set diff to 1
+                repeat until event stopLoop
+                    set now to Date.now()
+                    set diff to ((target - now)/1000 as Number).toFixed(1)
+                    set #timer's innerHTML to "Time left: " + diff
+                    wait 0.05s
+                    if diff <= 0
+                        send stopLoop to me
+                    end
+                end
+                '''))
 
 
 def GuessingState(curr_user: User, game: Game):
+    if not game.state: return None
     gs, ex = UserCard(game.guesser, w_score=False), UserCard(game.explainer, w_score=False)
-    word_block = Div(H2(f"Word: {game.word if game.state == State.ENDED or curr_user !=game.guesser else 'XXX'}", style='text-align: center;'))
+    word_block = Div(H2(
+        f"Word: {game.word if game.state == State.ENDED or curr_user != game.guesser else 'XXX'}",
+        style='text-align: center;'))
     timer = TimerFT(game.timer.time)
     btns = Div(
         Button("Guessed correctly", hx_post="/guess", hx_vals={"guess": "true"}),
@@ -62,12 +86,12 @@ def GameFT(curr_user: User):
 
 
 def UserCard(user: User, editable=False, w_score=True):
-    name = Input(type="text", name="name", value=user.name, cls='text-like-input',
-                 hx_post="/rename", hx_swap='none', hx_vals={'id': lobby.id}, style='margin: 5px 0;') if editable else user.name
+    name = Div(cls="user-name")(Input(type="text", name="name", value=user.name, cls='text-like-input',
+                                      hx_post="/rename", hx_swap='none', hx_vals={'id': lobby.id}, style='margin: 5px 0;')) if editable else Div(user.name, cls="user-name", uid=user.uid)
     image = Div(Img(src=user.img) if user.img else H3(user.name[0] if user.name else 'n', style='margin: 0;'),
                 cls='circle', style=f'background-color: {str2soft_hex(user.name)};')
     return Div(image,
-               Div(name, cls="user-name"),
+               name,
                Div(user.points, cls="user-score") if w_score else None,
                cls='user-info'
                )
@@ -79,11 +103,16 @@ def Users(curr_user: User = None):
                style='gap: 1.5rem; display: flex; flex-direction: column;', id='users')
 
 
+def PauseButton():
+    return Button("Pause")
+
+
 def Home(curr_user=None):
     t = 'Word Mines 💣'
     hdr = Header(H3(t), CheckboxX(label="Dark theme", role='switch',
                  onchange='changeTheme(event.target.checked)', id='theme'), cls='flex-hor')
-    main = Main(Users(curr_user), GameFT(curr_user), Div(), style='flex:1;', hx_ext='ws', ws_connect='/game')
-    ftr = Footer(P('© 2024. Made by ssslakter & cortuzz'), style='align-self: center;')
+    settings = Div(PauseButton(), cls='flex-vert', style='flex-direction: column-reverse;')
+    main = Main(Users(curr_user), GameFT(curr_user), settings, style='flex:1;', hx_ext='ws', ws_connect='/game')
+    ftr = Footer(P('© 2024. Made by ssslakter'), style='align-self: center;')
     body = Body(hdr, main, ftr, style='display: flex; flex-direction: column; min-height: 100vh;')
     return Title(t), body
